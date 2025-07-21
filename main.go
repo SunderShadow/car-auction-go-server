@@ -11,6 +11,8 @@ import (
 	"car-auction/routes/auction"
 	userRoutes "car-auction/routes/user"
 
+	"github.com/rs/cors"
+
 	"database/sql"
 	"errors"
 	"fmt"
@@ -38,11 +40,18 @@ func main() {
 
 	httpMux := http.NewServeMux()
 
+	c := cors.New(cors.Options{
+		AllowedMethods:   []string{"GET", "POST"},
+		AllowCredentials: true,
+		Debug:            true,
+		AllowedOrigins:   []string{"*"},
+	})
+
 	initHttpRoutes(httpMux)
 
 	fmt.Print("Server listening on http://localhost:" + os.Getenv("HTTP_SERVER_PORT"))
 
-	err := http.ListenAndServe(":"+os.Getenv("HTTP_SERVER_PORT"), httpMux)
+	err := http.ListenAndServe(":"+os.Getenv("HTTP_SERVER_PORT"), c.Handler(httpMux))
 
 	if err != nil {
 		log.Fatal(err)
