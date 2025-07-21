@@ -1,6 +1,7 @@
 package user
 
 import (
+	"car-auction/models/user"
 	"car-auction/oauth/google"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,8 @@ import (
 
 type Env struct {
 	GoogleOauth *google.Account
+
+	UserRepository *user.Repository
 }
 
 var env Env
@@ -67,4 +70,11 @@ func HandleFinishGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	userInfo, _ := env.GoogleOauth.UserInfo(data.AccessToken)
 
 	responseEncoder.Encode(userInfo)
+
+	userModel := new(user.Model)
+
+	userModel.Name = userInfo.Name
+	userModel.Picture = userInfo.Picture
+
+	env.UserRepository.Register(userModel)
 }

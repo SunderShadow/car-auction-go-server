@@ -1,13 +1,14 @@
 package main
 
 import (
+	"car-auction/models/user"
 	"github.com/joho/godotenv"
 
 	_ "modernc.org/sqlite"
 
 	"car-auction/oauth/google"
 	"car-auction/routes/auction"
-	"car-auction/routes/user"
+	userRoutes "car-auction/routes/user"
 
 	"database/sql"
 	"errors"
@@ -23,22 +24,15 @@ type Env struct {
 	Oauth struct {
 		Google *google.Account
 	}
+	Repositories struct {
+		UserRepository *user.Repository
+	}
 }
 
 var env Env
 
 func main() {
-
 	initEnvironment()
-
-	env.DB = initDatabase()
-	env.Oauth.Google = google.NewAuthenticator(&google.Env{
-		AuthURL:          "https://accounts.google.com/o/oauth2/auth",
-		ClientID:         os.Getenv("GOOGLE_CLIENT_ID"),
-		RedirectURL:      os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
-		TokenExchangeURL: "https://oauth2.googleapis.com/token",
-		UserInfoURL:      "https://www.googleapis.com/oauth2/v3/userinfo",
-	})
 
 	httpMux := http.NewServeMux()
 
@@ -56,14 +50,15 @@ func main() {
 func initHttpRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auction/lots", auction.HandleGetActiveLots)
 
-	user.SetupEnv(user.Env{
-		GoogleOauth: env.Oauth.Google,
+	userRoutes.SetupEnv(userRoutes.Env{
+		GoogleOauth:    env.Oauth.Google,
+		UserRepository: env.Repositories.UserRepository,
 	})
 
-	mux.HandleFunc("/user/oauth/google", user.HandleAuthByGoogleOauth)
-	mux.HandleFunc("/oauth/google", user.HandleFinishGoogleAuth)
+	mux.HandleFunc("/user/oauth/google", userRoutes.HandleAuthByGoogleOauth)
+	mux.HandleFunc("/oauth/google", userRoutes.HandleFinishGoogleAuth)
 
-	mux.HandleFunc("/user/bids", user.HandleGetUserBids)
+	mux.HandleFunc("/user/bids", userRoutes.HandleGetUserBids)
 }
 
 func initDatabase() *sql.DB {
@@ -86,16 +81,22 @@ func initDatabase() *sql.DB {
 			}
 		}
 
-		_, dbCreateErr := os.Create(filepath)
+		file, dbCreateErr := os.Create(filepath)
 
+		file.Chmod(0775)
 		if dbCreateErr != nil {
 			log.Fatal("Unable to create database file " + filepath)
 		}
 	}
 
-	db, err := sql.Open("sqlite", "sqlite:"+filepath)
+	db, err := sql.Open("sqlite", filepath)
 
 	if err != nil {
+		log.Println("Unable to connect to " + filepath + " file")
+		log.Fatal(err)
+	}
+
+	if err := db.Ping(); err != nil {
 		log.Println("Unable to connect to " + filepath + " file")
 		log.Fatal(err)
 	}
@@ -108,5 +109,23 @@ func initEnvironment() {
 
 	if err != nil {
 		log.Fatal("Error loading .env file")
+	}
+
+	env.DB = initDatabase()
+	env.Oauth.Google = google.NewAuthenticator(&google.Env{
+		AuthURL:          "https://accounts.google.com/o/oauth2/auth",
+		ClientID:         os.Getenv("GOOGLE_CLIENT_ID"),
+		RedirectURL:      os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
+		TokenExchangeURL: "https://oauth2.googleapis.com/token",
+		UserInfoURL:      "https://www.googleapis.com/oauth2/v3/userinfo",
+	})
+
+	initRepositories()
+}
+
+func initRepositories() {
+	env.Repositories.UserRepository = user.NewRepository(env.DB)
+	if err := env.Repositories.UserRepository.CreateTable(); err != nil {
+		log.Fatal(err)
 	}
 }
