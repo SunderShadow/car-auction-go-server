@@ -1,1 +1,6 @@
 .env
+
+main
+main.exe
+
+db.sqlite
