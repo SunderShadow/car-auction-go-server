@@ -2,7 +2,9 @@ package user
 
 import (
 	"car-auction/models/user"
+	googleOauth "car-auction/models/user/oauth/google"
 	"car-auction/oauth/google"
+
 	"encoding/json"
 	"net/http"
 )
@@ -10,7 +12,8 @@ import (
 type Env struct {
 	GoogleOauth *google.Account
 
-	UserRepository *user.Repository
+	UserRepository        *user.Repository
+	GoogleOauthRepository *googleOauth.Repository
 }
 
 var env Env
@@ -56,7 +59,7 @@ func HandleFinishGoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := env.GoogleOauth.ExchangeToken(requestData.Get("code"))
+	exchangeToken, err := env.GoogleOauth.ExchangeToken(requestData.Get("code"))
 
 	if err != nil {
 		responseEncoder.Encode(map[string]any{
@@ -67,7 +70,7 @@ func HandleFinishGoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userInfo, _ := env.GoogleOauth.UserInfo(data.AccessToken)
+	userInfo, _ := env.GoogleOauth.UserInfo(exchangeToken.AccessToken)
 
 	responseEncoder.Encode(userInfo)
 
@@ -77,4 +80,10 @@ func HandleFinishGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	userModel.Picture = userInfo.Picture
 
 	env.UserRepository.Register(userModel)
+
+	googleOauthModel := new(googleOauth.Model)
+	googleOauthModel.AccessToken = exchangeToken.AccessToken
+	googleOauthModel.AccessTokenExpiresIn = exchangeToken.ExpiresIn
+
+	env.GoogleOauthRepository.Register(userModel, googleOauthModel)
 }

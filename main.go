@@ -2,11 +2,12 @@ package main
 
 import (
 	"car-auction/models/user"
+	oauthGoogle "car-auction/models/user/oauth/google"
 	"github.com/joho/godotenv"
 
 	_ "modernc.org/sqlite"
 
-	"car-auction/oauth/google"
+	googleOauthHelper "car-auction/oauth/google"
 	"car-auction/routes/auction"
 	userRoutes "car-auction/routes/user"
 
@@ -22,10 +23,11 @@ import (
 type Env struct {
 	DB    *sql.DB
 	Oauth struct {
-		Google *google.Account
+		Google *googleOauthHelper.Account
 	}
 	Repositories struct {
-		UserRepository *user.Repository
+		UserRepository        *user.Repository
+		GoogleOauthRepository *oauthGoogle.Repository
 	}
 }
 
@@ -51,8 +53,9 @@ func initHttpRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auction/lots", auction.HandleGetActiveLots)
 
 	userRoutes.SetupEnv(userRoutes.Env{
-		GoogleOauth:    env.Oauth.Google,
-		UserRepository: env.Repositories.UserRepository,
+		GoogleOauth:           env.Oauth.Google,
+		UserRepository:        env.Repositories.UserRepository,
+		GoogleOauthRepository: env.Repositories.GoogleOauthRepository,
 	})
 
 	mux.HandleFunc("/user/oauth/google", userRoutes.HandleAuthByGoogleOauth)
@@ -112,7 +115,7 @@ func initEnvironment() {
 	}
 
 	env.DB = initDatabase()
-	env.Oauth.Google = google.NewAuthenticator(&google.Env{
+	env.Oauth.Google = googleOauthHelper.NewAuthenticator(&googleOauthHelper.Env{
 		AuthURL:          "https://accounts.google.com/o/oauth2/auth",
 		ClientID:         os.Getenv("GOOGLE_CLIENT_ID"),
 		RedirectURL:      os.Getenv("GOOGLE_OAUTH_REDIRECT_URL"),
@@ -126,6 +129,11 @@ func initEnvironment() {
 func initRepositories() {
 	env.Repositories.UserRepository = user.NewRepository(env.DB)
 	if err := env.Repositories.UserRepository.CreateTable(); err != nil {
+		log.Fatal(err)
+	}
+
+	env.Repositories.GoogleOauthRepository = oauthGoogle.NewRepository(env.DB)
+	if err := env.Repositories.GoogleOauthRepository.CreateTable(); err != nil {
 		log.Fatal(err)
 	}
 }
