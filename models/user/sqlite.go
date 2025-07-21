@@ -1,9 +1,26 @@
 package user
 
-import "database/sql"
+import (
+	"database/sql"
+	"errors"
+)
 
 type sqliteDriver struct {
 	db *sql.DB
+}
+
+func (driver sqliteDriver) FindById(id int64) *Model {
+	row := driver.db.QueryRow(`SELECT * FROM users WHERE id = ?`, id)
+
+	model := new(Model)
+
+	err := row.Scan(&model.Id, &model.Name, &model.Picture)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+
+	return model
 }
 
 func (driver sqliteDriver) Register(model *Model) error {

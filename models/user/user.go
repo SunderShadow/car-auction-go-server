@@ -13,6 +13,7 @@ type Model struct {
 }
 
 type RepositoryDriver interface {
+	FindById(id int64) *Model
 	Register(model *Model) error
 	CreateTable() error
 }
@@ -31,6 +32,10 @@ func NewRepository(db *sql.DB) *Repository {
 		log.Fatalln(`No repository driver for current db driver`)
 		return nil
 	}
+}
+
+func (repo *Repository) FindById(id int64) *Model {
+	return repo.driver.FindById(id)
 }
 
 func (repo *Repository) CreateTable() error {

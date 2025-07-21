@@ -2,6 +2,7 @@ package google
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,6 +89,10 @@ func (auth *Account) UserInfo(accessToken string) (*UserInfo, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if len(data.Sub) == 0 {
+		return nil, errors.New(`authentication error`)
 	}
 
 	return data, nil

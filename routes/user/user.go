@@ -4,7 +4,6 @@ import (
 	"car-auction/models/user"
 	googleOauth "car-auction/models/user/oauth/google"
 	"car-auction/oauth/google"
-
 	"encoding/json"
 	"net/http"
 )
@@ -51,39 +50,87 @@ func HandleFinishGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	requestData := r.URL.Query()
 
 	if requestData.Has("error") {
+		w.WriteHeader(403)
+
 		responseEncoder.Encode(map[string]any{
 			"message": "Unauthenticated",
 		})
 
-		w.WriteHeader(403)
 		return
 	}
 
 	exchangeToken, err := env.GoogleOauth.ExchangeToken(requestData.Get("code"))
 
 	if err != nil {
+		w.WriteHeader(403)
+
 		responseEncoder.Encode(map[string]any{
 			"message": "Unauthenticated",
 		})
 
-		w.WriteHeader(403)
 		return
 	}
 
-	userInfo, _ := env.GoogleOauth.UserInfo(exchangeToken.AccessToken)
+	userInfo, userInfoErr := env.GoogleOauth.UserInfo(exchangeToken.AccessToken)
 
-	responseEncoder.Encode(userInfo)
+	if userInfoErr != nil {
+		w.WriteHeader(403)
 
-	userModel := new(user.Model)
+		responseEncoder.Encode(map[string]any{
+			"message": "Unauthenticated",
+		})
+
+		return
+	}
+
+	googleOauthModel := env.GoogleOauthRepository.FindByGoogleUserId(userInfo.Sub)
+
+	var userModel *user.Model
+
+	if googleOauthModel != nil {
+		userModel = env.UserRepository.FindById(googleOauthModel.UserId)
+
+		if userModel != nil {
+			responseEncoder.Encode(userInfo)
+			return
+		}
+	}
+
+	userModel = new(user.Model)
 
 	userModel.Name = userInfo.Name
 	userModel.Picture = userInfo.Picture
 
-	env.UserRepository.Register(userModel)
+	err = env.UserRepository.Register(userModel)
 
-	googleOauthModel := new(googleOauth.Model)
-	googleOauthModel.AccessToken = exchangeToken.AccessToken
-	googleOauthModel.AccessTokenExpiresIn = exchangeToken.ExpiresIn
+	if err != nil {
+		w.WriteHeader(500)
 
-	env.GoogleOauthRepository.Register(userModel, googleOauthModel)
+		responseEncoder.Encode(map[string]any{
+			"message": "Server error",
+		})
+
+		return
+	}
+
+	if googleOauthModel == nil {
+		googleOauthModel = new(googleOauth.Model)
+		googleOauthModel.AccessToken = exchangeToken.AccessToken
+		googleOauthModel.AccessTokenExpiresIn = exchangeToken.ExpiresIn
+		googleOauthModel.GoogleUserId = userInfo.Sub
+
+		err := env.GoogleOauthRepository.Register(userModel, googleOauthModel)
+
+		if err != nil {
+			w.WriteHeader(500)
+
+			responseEncoder.Encode(map[string]any{
+				"message": "Server error",
+			})
+
+			return
+		}
+	}
+
+	responseEncoder.Encode(userInfo)
 }

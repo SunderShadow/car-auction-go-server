@@ -11,9 +11,11 @@ type Model struct {
 	UserId               int64
 	AccessToken          string
 	AccessTokenExpiresIn int64
+	GoogleUserId         string
 }
 
 type RepositoryDriver interface {
+	FindByGoogleUserId(id string) *Model
 	Register(user *user.Model, model *Model) error
 	CreateTable() error
 }
@@ -32,6 +34,10 @@ func NewRepository(db *sql.DB) *Repository {
 		log.Fatalln(`No repository driver for current db driver`)
 		return nil
 	}
+}
+
+func (repo *Repository) FindByGoogleUserId(id string) *Model {
+	return repo.driver.FindByGoogleUserId(id)
 }
 
 func (repo *Repository) CreateTable() error {
