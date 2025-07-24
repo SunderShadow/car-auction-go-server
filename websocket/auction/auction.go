@@ -22,9 +22,12 @@ func NewServer() *Server {
 	}
 }
 
-func (server *Server) WriteJSON(v interface{}) error {
+func (server *Server) WriteJSON(event string, data interface{}) error {
 	for conn, _ := range server.connections {
-		return conn.WriteJSON(v)
+		return conn.WriteJSON(map[string]any{
+			"event": event,
+			"data":  data,
+		})
 	}
 
 	return nil

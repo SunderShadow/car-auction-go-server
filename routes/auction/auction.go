@@ -57,7 +57,7 @@ func HandleAddLot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	env.AuctionWebsocketServer.WriteJSON(requestData)
+	env.AuctionWebsocketServer.WriteJSON("lot.create", requestData)
 
 	responseEncoder.Encode(requestData)
 }
