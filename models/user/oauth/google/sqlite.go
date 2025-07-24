@@ -17,6 +17,7 @@ func (driver sqliteDriver) CreateTable() error {
 		    access_token VARCHAR,
 		    access_token_expires_in INTEGER,
 		    google_user_id VARCHAR,
+		    current_bid INTEGER,
 		    
 		    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 		)

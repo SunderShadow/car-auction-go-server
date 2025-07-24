@@ -1,17 +1,20 @@
 package main
 
 import (
-	"car-auction/models/user"
-	oauthGoogle "car-auction/models/user/oauth/google"
-	"github.com/joho/godotenv"
-
+	"car-auction/models/lot"
 	_ "modernc.org/sqlite"
 
-	googleOauthHelper "car-auction/oauth/google"
-	"car-auction/routes/auction"
-	userRoutes "car-auction/routes/user"
-
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
+
+	auctoinWebsocket "car-auction/websocket/auction"
+
+	"car-auction/models/user"
+	oauthGoogle "car-auction/models/user/oauth/google"
+
+	googleOauthHelper "car-auction/oauth/google"
+	auctionRoutes "car-auction/routes/auction"
+	userRoutes "car-auction/routes/user"
 
 	"database/sql"
 	"errors"
@@ -30,7 +33,9 @@ type Env struct {
 	Repositories struct {
 		UserRepository        *user.Repository
 		GoogleOauthRepository *oauthGoogle.Repository
+		AuctionLotRepository  *lot.Repository
 	}
+	AuctionWebsocketServer *auctoinWebsocket.Server
 }
 
 var env Env
@@ -43,13 +48,14 @@ func main() {
 	c := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST"},
 		AllowCredentials: true,
-		Debug:            true,
+		Debug:            false,
 		AllowedOrigins:   []string{"*"},
 	})
 
 	initHttpRoutes(httpMux)
+	initWebsocketRoutes(httpMux)
 
-	fmt.Print("Server listening on http://localhost:" + os.Getenv("HTTP_SERVER_PORT"))
+	fmt.Println("Server listening on http://localhost:" + os.Getenv("HTTP_SERVER_PORT"))
 
 	err := http.ListenAndServe(":"+os.Getenv("HTTP_SERVER_PORT"), c.Handler(httpMux))
 
@@ -58,19 +64,28 @@ func main() {
 	}
 }
 
-func initHttpRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/auction/lots", auction.HandleGetActiveLots)
+func initWebsocketRoutes(httpMux *http.ServeMux) {
+	httpMux.HandleFunc("/auction", env.AuctionWebsocketServer.ServeWebsocket)
+}
 
+func initHttpRoutes(mux *http.ServeMux) {
 	userRoutes.SetupEnv(userRoutes.Env{
 		GoogleOauth:           env.Oauth.Google,
 		UserRepository:        env.Repositories.UserRepository,
 		GoogleOauthRepository: env.Repositories.GoogleOauthRepository,
 	})
 
-	mux.HandleFunc("/user/oauth/google", userRoutes.HandleAuthByGoogleOauth)
-	mux.HandleFunc("/oauth/google", userRoutes.HandleFinishGoogleAuth)
+	mux.HandleFunc("GET /user/oauth/google", userRoutes.HandleAuthByGoogleOauth)
+	mux.HandleFunc("GET /oauth/google", userRoutes.HandleFinishGoogleAuth)
+	mux.HandleFunc("GET /user/bids", userRoutes.HandleGetUserBids)
 
-	mux.HandleFunc("/user/bids", userRoutes.HandleGetUserBids)
+	auctionRoutes.SetupEnv(auctionRoutes.Env{
+		AuctionLotRepository:   env.Repositories.AuctionLotRepository,
+		AuctionWebsocketServer: env.AuctionWebsocketServer,
+	})
+
+	mux.HandleFunc("GET /auction/lot/all", auctionRoutes.HandleGetAllLots)
+	mux.HandleFunc("PUT /auction/lot/add", auctionRoutes.HandleAddLot)
 }
 
 func initDatabase() *sql.DB {
@@ -132,6 +147,8 @@ func initEnvironment() {
 		UserInfoURL:      "https://www.googleapis.com/oauth2/v3/userinfo",
 	})
 
+	env.AuctionWebsocketServer = auctoinWebsocket.NewServer()
+
 	initRepositories()
 }
 
@@ -143,6 +160,11 @@ func initRepositories() {
 
 	env.Repositories.GoogleOauthRepository = oauthGoogle.NewRepository(env.DB)
 	if err := env.Repositories.GoogleOauthRepository.CreateTable(); err != nil {
+		log.Fatal(err)
+	}
+
+	env.Repositories.AuctionLotRepository = lot.NewRepository(env.DB)
+	if err := env.Repositories.AuctionLotRepository.CreateTable(); err != nil {
 		log.Fatal(err)
 	}
 }

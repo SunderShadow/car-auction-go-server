@@ -26,12 +26,12 @@ func HandleGetUserBids(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse.Encode([]map[string]any{
 		{
-			"Id":  0,
-			"Bid": "50000",
+			"id":  0,
+			"bid": "50000",
 		},
 		{
-			"Id":  1,
-			"Bid": "35600",
+			"id":  1,
+			"bid": "35600",
 		},
 	})
 }
